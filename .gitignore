@@ -1,0 +1,9 @@
+.venv
+__pycache__
+test*.py
+
+*.docx
+*.odt
+*.zip
+curso_scorm
+doc2scorm.egg-info
