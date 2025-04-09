@@ -9,10 +9,11 @@ from xml.dom.minidom import parseString
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 
-def save_pages_as_html(units, output_dir, template_name="base.html"):
+def save_pages_as_html(units, ungrouped_pages, output_dir, template_name="base.html"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template(template_name)
 
+    # Guardar páginas con unidad
     for unit_idx, unit in enumerate(units, start=1):
         for page_idx, page in enumerate(unit["pages"], start=1):
             filename = f"page_{unit_idx}_{page_idx}.html"
@@ -21,12 +22,18 @@ def save_pages_as_html(units, output_dir, template_name="base.html"):
                 f.write(html)
             page["file_name"] = filename
 
-    return units
+    # Guardar páginas sin unidad
+    for idx, page in enumerate(ungrouped_pages, start=1):
+        filename = f"ungrouped_{idx}.html"
+        html = template.render(title=page["title"], content=page["html"])
+        with open(os.path.join(output_dir, filename), "w", encoding="utf-8") as f:
+            f.write(html)
+        page["file_name"] = filename
 
-def build_imsmanifest(course_title, units, output_dir):
-    from xml.etree.ElementTree import Element, SubElement, tostring
-    from xml.dom.minidom import parseString
+    return units, ungrouped_pages
 
+
+def build_imsmanifest(course_title, units, ungrouped_pages, output_dir):
     manifest = Element("manifest", {
         "identifier": "com.example.scormcourse",
         "version": "1.2",
@@ -50,18 +57,33 @@ def build_imsmanifest(course_title, units, output_dir):
     resources = SubElement(manifest, "resources")
     resource_counter = 1
 
+    # Páginas sin unidad
+    for idx, page in enumerate(ungrouped_pages, start=1):
+        res_id = f"res_ungrouped_{idx}"
+        item = SubElement(organization, "item", identifier=f"ungrouped_{idx}", identifierref=res_id)
+        SubElement(item, "title").text = page["title"]
+
+        resource = SubElement(resources, "resource", {
+            "identifier": res_id,
+            "type": "webcontent",
+            "adlcp:scormtype": "sco",
+            "href": page["file_name"]
+        })
+        SubElement(resource, "file", href=page["file_name"])
+
+    # Unidades
     for unit_idx, unit in enumerate(units, start=1):
         unit_id = f"unit{unit_idx}"
-        unit_item = SubElement(organization, "item", identifier=unit_id)
-        SubElement(unit_item, "title").text = unit["title"]
+        pages = unit["pages"]
 
-        for page_idx, page in enumerate(unit["pages"], start=1):
+        if len(pages) == 1:
+            # Unidad con una sola página → mostrar como ítem normal
             res_id = f"res{resource_counter}"
-            file_name = f"page_{unit_idx}_{page_idx}.html"
-            page["file_name"] = file_name
+            file_name = f"page_{unit_idx}_1.html"
+            pages[0]["file_name"] = file_name
 
-            page_item = SubElement(unit_item, "item", identifier=f"{unit_id}_page{page_idx}", identifierref=res_id)
-            SubElement(page_item, "title").text = page["title"]
+            unit_item = SubElement(organization, "item", identifier=unit_id, identifierref=res_id)
+            SubElement(unit_item, "title").text = pages[0]["title"]
 
             resource = SubElement(resources, "resource", {
                 "identifier": res_id,
@@ -70,15 +92,41 @@ def build_imsmanifest(course_title, units, output_dir):
                 "href": file_name
             })
             SubElement(resource, "file", href=file_name)
-
             resource_counter += 1
 
-    # Pretty-print XML
+        elif len(pages) > 1:
+            # Unidad con varias páginas → crear grupo
+            unit_item = SubElement(organization, "item", identifier=unit_id)
+            SubElement(unit_item, "title").text = unit["title"]
+
+            for page_idx, page in enumerate(pages, start=1):
+                res_id = f"res{resource_counter}"
+                file_name = f"page_{unit_idx}_{page_idx}.html"
+                page["file_name"] = file_name
+
+                page_item = SubElement(unit_item, "item", identifier=f"{unit_id}_page{page_idx}", identifierref=res_id)
+                SubElement(page_item, "title").text = page["title"]
+
+                resource = SubElement(resources, "resource", {
+                    "identifier": res_id,
+                    "type": "webcontent",
+                    "adlcp:scormtype": "sco",
+                    "href": file_name
+                })
+                SubElement(resource, "file", href=file_name)
+
+                resource_counter += 1
+
+        else:
+            continue  # Unidad vacía → no se agrega
+
+    # Guardar imsmanifest.xml
     xml_str = tostring(manifest, encoding="utf-8")
     pretty_xml = parseString(xml_str).toprettyxml(indent="  ")
 
     with open(os.path.join(output_dir, "imsmanifest.xml"), "w", encoding="utf-8") as f:
         f.write(pretty_xml)
+
 
 def package_scorm(output_dir, output_zip_path):
     with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -88,13 +136,15 @@ def package_scorm(output_dir, output_zip_path):
                 rel_path = os.path.relpath(abs_path, output_dir)
                 zipf.write(abs_path, rel_path)
 
-def build_scorm_package(pages, output_zip_path, course_title="Mi Curso SCORM"):
+
+def build_scorm_package(units_and_ungrouped, output_zip_path, course_title="Mi Curso SCORM"):
     temp_dir = f"scorm_temp_{uuid4().hex}"
     os.makedirs(temp_dir, exist_ok=True)
 
     try:
-        page_info = save_pages_as_html(pages, temp_dir)
-        build_imsmanifest(course_title, page_info, temp_dir)
+        units, ungrouped_pages = units_and_ungrouped
+        units, ungrouped_pages = save_pages_as_html(units, ungrouped_pages, temp_dir)
+        build_imsmanifest(course_title, units, ungrouped_pages, temp_dir)
         package_scorm(temp_dir, output_zip_path)
     finally:
         shutil.rmtree(temp_dir)

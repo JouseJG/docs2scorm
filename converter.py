@@ -47,8 +47,11 @@ def read_odt_as_html(path):
 
 
 def extract_hierarchical_sections(html_content, ignore_empty_titles=True):
+    from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(html_content, "html.parser")
     units = []
+    ungrouped_pages = []
     current_unit = None
     current_page = None
     current_intro = ""
@@ -57,51 +60,46 @@ def extract_hierarchical_sections(html_content, ignore_empty_titles=True):
         tag_name = getattr(tag, "name", None)
 
         if tag_name == "h1":
-            # Si había contenido introductorio acumulado, guardarlo como página
             if current_unit and current_intro.strip():
                 current_unit["pages"].insert(0, {
                     "title": f"{current_unit['title']} (Introducción)",
                     "html": current_intro
                 })
 
-            # Nueva unidad
             title = tag.get_text(strip=True)
             if ignore_empty_titles and not title:
                 continue
 
             current_unit = {"title": title, "pages": []}
             units.append(current_unit)
-            current_intro = ""  # Reiniciar intro
+            current_intro = ""
 
         elif tag_name == "h2":
             title = tag.get_text(strip=True)
             if ignore_empty_titles and not title:
                 continue
 
-            # Si aún no hay unidad creada, creamos una por defecto
-            if current_unit is None:
-                current_unit = {"title": "Introduccion", "pages": []}
-                units.append(current_unit)
+            page = {"title": title, "html": str(tag)}
+            if current_unit:
+                current_unit["pages"].append(page)
+            else:
+                ungrouped_pages.append(page)
 
-            current_page = {"title": title, "html": str(tag)}
-            current_unit["pages"].append(current_page)
+            current_page = page
 
         elif current_page:
-            # Añadir contenido al tema (h2)
             current_page["html"] += str(tag)
 
         elif current_unit:
-            # Estamos entre h1 y h2: esto es contenido introductorio
             current_intro += str(tag)
 
-    # Guardar última intro si quedó algo sin cerrar
     if current_unit and current_intro.strip():
         current_unit["pages"].insert(0, {
             "title": f"{current_unit['title']} (Introducción)",
             "html": current_intro
         })
 
-    return units
+    return units, ungrouped_pages
 
 def extract_sections(html_content, split_level=2):
     """
