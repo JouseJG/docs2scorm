@@ -4,11 +4,26 @@ from odf.opendocument import load
 from odf import text
 from odf import teletype
 from docx import Document
+import base64
 
 
 def read_docx_as_html(path):
+    def embed_image(image):
+        try:
+            with image.open() as image_bytes:
+                encoded = base64.b64encode(image_bytes.read()).decode("utf-8")
+                return {
+                    "src": f"data:{image.content_type};base64,{encoded}"
+                }
+        except Exception as e:
+            print(f"⚠️ Imagen no disponible: {e}")
+            return {}
+
     with open(path, "rb") as f:
-        result = mammoth.convert_to_html(f)
+        result = mammoth.convert_to_html(
+            f,
+            convert_image=mammoth.images.inline(embed_image)
+        )
         return result.value
 
 
