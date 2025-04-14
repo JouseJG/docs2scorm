@@ -3,3 +3,4 @@ mammoth
 odfpy
 jinja2
 beautifulsoup4
+Pillow==10.2.0 
