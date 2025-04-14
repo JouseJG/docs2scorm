@@ -1,17 +1,17 @@
 from setuptools import setup, find_packages
+from pathlib import Path
+
+def _read_content(path: str) -> str:
+    return (Path(__file__).parent / path).read_text(encoding="utf-8")
+
+requirements = _read_content("requirements.txt").splitlines()
 
 setup(
     name="doc2scorm",
     version="0.1",
     packages=find_packages(),
     include_package_data=True,
-    install_requires=[
-        "python-docx",
-        "mammoth",
-        "odfpy",
-        "jinja2",
-        "beautifulsoup4"
-    ],
+    install_requires=requirements,
     entry_points={
         "console_scripts": [
             "doc2scorm=doc2scorm.cli:main"
