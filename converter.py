@@ -46,7 +46,7 @@ def read_odt_as_html(path):
     return html
 
 
-def extract_hierarchical_sections(html_content, ignore_empty_titles=True):
+def extract_hierarchical_sections(html_content, ignore_empty_titles=True, include_heading_in_intro=True):
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html_content, "html.parser")
@@ -55,15 +55,18 @@ def extract_hierarchical_sections(html_content, ignore_empty_titles=True):
     current_unit = None
     current_page = None
     current_intro = ""
+    pending_h1_tag = None
 
     for tag in soup.children:
         tag_name = getattr(tag, "name", None)
 
         if tag_name == "h1":
+            # Guardar contenido de la unidad anterior como página si existe
             if current_unit and current_intro.strip():
+                html_intro = f"{pending_h1_tag}\n{current_intro.strip()}" if include_heading_in_intro and pending_h1_tag else current_intro.strip()
                 current_unit["pages"].insert(0, {
-                    "title": f"{current_unit['title']} (Introducción)",
-                    "html": current_intro
+                    "title": current_unit["title"],
+                    "html": html_intro
                 })
 
             title = tag.get_text(strip=True)
@@ -72,31 +75,48 @@ def extract_hierarchical_sections(html_content, ignore_empty_titles=True):
 
             current_unit = {"title": title, "pages": []}
             units.append(current_unit)
+
+            pending_h1_tag = str(tag)
             current_intro = ""
+            current_page = None
 
-        elif tag_name == "h2":
-            title = tag.get_text(strip=True)
-            if ignore_empty_titles and not title:
-                continue
+        elif tag_name and tag_name.startswith("h"):
+            # Si hay texto entre h1 y h2 → crear página para el h1
+            if current_unit and current_intro.strip():
+                html_intro = f"{pending_h1_tag}\n{current_intro.strip()}" if include_heading_in_intro and pending_h1_tag else current_intro.strip()
+                current_unit["pages"].insert(0, {
+                    "title": current_unit["title"],
+                    "html": html_intro
+                })
+                current_intro = ""
+                pending_h1_tag = None
 
-            page = {"title": title, "html": str(tag)}
-            if current_unit:
-                current_unit["pages"].append(page)
-            else:
-                ungrouped_pages.append(page)
+            if tag_name == "h2":
+                title = tag.get_text(strip=True)
+                if ignore_empty_titles and not title:
+                    continue
 
-            current_page = page
+                page = {"title": title, "html": str(tag)}
+                if current_unit:
+                    current_unit["pages"].append(page)
+                else:
+                    ungrouped_pages.append(page)
+
+                current_page = page
 
         elif current_page:
             current_page["html"] += str(tag)
 
         elif current_unit:
-            current_intro += str(tag)
+            if tag.name or str(tag).strip():
+                current_intro += str(tag)
 
+    # Último contenido pendiente
     if current_unit and current_intro.strip():
+        html_intro = f"{pending_h1_tag}\n{current_intro.strip()}" if include_heading_in_intro and pending_h1_tag else current_intro.strip()
         current_unit["pages"].insert(0, {
-            "title": f"{current_unit['title']} (Introducción)",
-            "html": current_intro
+            "title": current_unit["title"],
+            "html": html_intro
         })
 
     return units, ungrouped_pages
