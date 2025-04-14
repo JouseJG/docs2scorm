@@ -24,7 +24,7 @@ setup(
     description="Convierte documentos .docx/.odt en paquetes SCORM.",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License"
+        "License :: GPL-3.0"
     ],
     python_requires='>=3.7',
 )
