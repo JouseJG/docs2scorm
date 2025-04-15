@@ -6,4 +6,4 @@ test*.py
 *.odt
 *.zip
 curso_scorm
-doc2scorm.egg-info
+docs2scorm.egg-info

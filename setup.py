@@ -7,18 +7,18 @@ def _read_content(path: str) -> str:
 requirements = _read_content("requirements.txt").splitlines()
 
 setup(
-    name="doc2scorm",
+    name="docs2scorm",
     version="0.1",
     packages=find_packages(),
     include_package_data=True,
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "doc2scorm=doc2scorm.cli:main"
+            "docs2scorm=docs2scorm.cli:main"
         ]
     },
     package_data={
-        "doc2scorm": ["templates/*.html"]
+        "docs2scorm": ["templates/*.html"]
     },
     author="Jose Ramon Jimenez",
     description="Convierte documentos .docx/.odt en paquetes SCORM.",
