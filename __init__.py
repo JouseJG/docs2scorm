@@ -17,7 +17,7 @@ def convert_to_scorm(file_path, output_zip, config=None):
     """
     config = config or DEFAULT_CONFIG
 
-    try
+    try:
         units_and_ungrouped = convert_to_pages(file_path, split_level=config["split_level"])
         build_scorm_package(units_and_ungrouped, output_zip, course_title=config["course_title"])
         return True

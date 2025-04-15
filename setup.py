@@ -20,7 +20,7 @@ setup(
     package_data={
         "doc2scorm": ["templates/*.html"]
     },
-    author="Tu Nombre",
+    author="Jose Ramon Jimenez",
     description="Convierte documentos .docx/.odt en paquetes SCORM.",
     classifiers=[
         "Programming Language :: Python :: 3",
