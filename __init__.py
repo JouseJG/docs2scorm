@@ -23,9 +23,9 @@ def convert_to_scorm(file_path, output_zip, config=None):
         return True
     except Exception as e:
         print(e)
-        return False
+        return None
 
-def convert_to_html(file_path, output_path):
+def convert_to_html(file_path, output_path=None):
     """
     Convierte un archivo .docx a html (ACTUALMENTE SOLO SOPORTA DOCX).
 
@@ -33,8 +33,7 @@ def convert_to_html(file_path, output_path):
     :param output_path: Ruta del html generado.
     """
     try:
-        build_html(file_path, output_path)
-        return True
+        return build_html(file_path, output_path)
     except Exception as e:
         print(e)
-        return False
+        return None
