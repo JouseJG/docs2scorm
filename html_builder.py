@@ -4,13 +4,10 @@ from io import BytesIO
 from docx import Document
 from docx.oxml.ns import qn
 from PIL import Image
-import tempfile
-
 
 
 def _get_image_mime_type(image_data):
     """Detect image MIME type from its magic numbers."""
-
     magic_numbers = {
         b'\x89PNG\r\n\x1a\n': 'image/png',
         b'\xFF\xD8\xFF': 'image/jpeg',
@@ -27,63 +24,49 @@ def _get_image_mime_type(image_data):
 
 def _convert_image_to_base64(image_data):
     """Convert image data to base64 string with proper MIME type."""
-
     try:
-        # Try to optimize the image
         img = Image.open(BytesIO(image_data))
-
-        # Convert RGBA to RGB if necessary
         if img.mode in ('RGBA', 'LA'):
             background = Image.new('RGB', img.size, (255, 255, 255))
             background.paste(img, mask=img.split()[-1])
             img = background
 
-        # Resize image if too large
-
-        max_width = 700  # Maximum width in pixels
+        max_width = 700
         if img.size[0] > max_width:
             ratio = max_width / img.size[0]
-            new_size = (max_width, int(img.size[1] * ratio))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            img = img.resize((max_width, int(img.size[1] * ratio)), Image.Resampling.LANCZOS)
 
-        # Save optimized image
         output = BytesIO()
         img.save(output, format='JPEG', quality=85, optimize=True)
         image_data = output.getvalue()
         mime_type = 'image/jpeg'
 
     except Exception as e:
-        # If optimization fails, use original image data
+        print(f"Error processing image: {e}")
         mime_type = _get_image_mime_type(image_data)
 
     base64_data = base64.b64encode(image_data).decode('utf-8')
-
     return f'data:{mime_type};base64,{base64_data}'
+
 
 def find_image_id(element):
     """Find image relationship ID in a drawing element."""
-
     blip = element.find('.//a:blip', {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
     if blip is not None:
         embed = blip.get(qn('r:embed'))
-        if embed:
             return embed
+            return embed
+
+        return embed
 
     return None
 
-def build_html(file_path, output_path):
-    """Process DOCX file and convert to HTML with styling."""
-
-    # # Save the file temporarily
-    # temp_dir = tempfile.gettempdir()
-    # temp_path = os.path.join(temp_dir, 'temp.docx')
-    # file.save(temp_path)
-
-    # Open the saved file
+def build_html(file_path, output_path=None):
+    """Process DOCX file and convert to styled HTML."""
     doc = Document(file_path)
     html_content = []
 
-    # Define inline styles
+    # Inline styles
     styles = {
         'body': 'font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; color: #333;',
         'wrapper': 'background: white; padding: 30px; border-radius: 10px;',
@@ -98,19 +81,20 @@ def build_html(file_path, output_path):
         'em': 'color: #4a5568; font-style: italic;'
     }
 
-    # Start with complete HTML structure
-    html_content.append('<!DOCTYPE html>')
-    html_content.append('<html lang="es">')
-    html_content.append('<head>')
-    html_content.append('<meta charset="UTF-8">')
-    html_content.append('<meta name="viewport" content="width=device-width, initial-scale=1.0">')
-    html_content.append('<title>Documento Convertido</title>')
-    html_content.append('</head>')
-    html_content.append(f'<body style="{styles["body"]}">')
-    html_content.append(f'<div style="{styles["wrapper"]}">')
-    
+    # HTML head
+    html_content.extend([
+        '<!DOCTYPE html>',
+        '<html lang="es">',
+        '<head>',
+        '<meta charset="UTF-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+        '<title>Documento Convertido</title>',
+        '</head>',
+        f'<body style="{styles["body"]}">',
+        f'<div style="{styles["wrapper"]}">'
+    ])
+
     try:
-        # Create a mapping of image relationships
         image_rels = {}
         for rel in doc.part.rels.values():
             if "image" in rel.reltype:
@@ -118,75 +102,86 @@ def build_html(file_path, output_path):
                     image_data = rel.target_part.blob
                     image_base64 = _convert_image_to_base64(image_data)
                     image_rels[rel.rId] = image_base64
-
                 except Exception as e:
-                    print(f"Error processing image: {str(e)}")
-                    continue
+                    print(f"Error loading image: {e}")
 
-        # Process paragraphs and inline images
+        # Paragraphs
         for para in doc.paragraphs:
-            if para.style.name.startswith('Heading'):
-                level = int(para.style.name[-1])
-                html_content.append(f'<h{level} style="{styles[f"h{level}"]}">{para.text}</h{level}>')
+            text = para.text.strip()
+            style_name = getattr(para.style, "name", "").lower()
 
-            else:
-                # Check if this paragraph looks like a definition
-                text = para.text.strip()
-                is_definition = text and (':' in text[:50] or text.startswith('NOTA:') or text.startswith('Definición:'))
+            # Headings
+            if style_name.startswith("heading"):
+                try:
+                    level = int(style_name.split()[-1])
+                    heading_style = styles.get(f"h{level}", "")
+                    html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
+                    continue
+                except (IndexError, ValueError):
+                    pass
 
-                
+            # Definitions
+            definition_triggers = ['definición:', 'nota:', ':']
+            is_definition = any(text.lower().startswith(t) for t in definition_triggers) or ':' in text[:50]
 
-                if is_definition:
-                    html_content.append(f'<div style="{styles["definition"]}">')
+            if is_definition:
+                html_content.append(f'<div style="{styles["definition"]}">')
 
-                # Check for inline images in this paragraph
-                has_images = False
-                xml_element = para._element
-
-                for element in xml_element.iter():
-                    if element.tag.endswith('drawing'):
-                        has_images = True
+            # Inline images
+            has_images = False
+            xml_element = para._element
+            for element in xml_element.iter():
+                if element.tag.endswith('drawing'):
+                        rel_id = find_image_id(element)
                         rel_id = find_image_id(element)
 
-                        if rel_id and rel_id in image_rels:
-                            html_content.append(f'<div style="{styles["image"]}">')
-                            html_content.append(f'<img src="{image_rels[rel_id]}" alt="Document image" loading="lazy" style="{styles["img"]}">')
-                            html_content.append('</div>')
+                    rel_id = find_image_id(element)
 
-                # Process text content if there is any
-                if para.text.strip() or not has_images:
+                    if rel_id and rel_id in image_rels:
+                        html_content.append(f'<div style="{styles["image"]}">')
+                        html_content.append(f'<img src="{image_rels[rel_id]}" alt="Document image" loading="lazy" style="{styles["img"]}">')
+                        html_content.append('</div>')
+                        has_images = True
 
+            # Text content
+            if text or not has_images:
+                    formatted_text = ""
                     formatted_text = ""
 
-                    for run in para.runs:
-                        if run.bold and run.italic:
-                            formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run.text}</em></strong>'
+                formatted_text = ""
 
-                        elif run.bold:
-                            formatted_text += f'<strong style="{styles["strong"]}">{run.text}</strong>'
+                for run in para.runs:
+                    run_text = run.text
+                    if not run_text.strip():
+                        continue
 
-                        elif run.italic:
-                            formatted_text += f'<em style="{styles["em"]}">{run.text}</em>'
+                    if run.bold and run.italic:
+                        formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
+                    elif run.bold:
+                        formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
+                    elif run.italic:
+                        formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
+                    else:
+                        formatted_text += run_text
 
-                        else:
-                            formatted_text += run.text                 
+                if formatted_text.strip():
+                    html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
 
-                    if formatted_text.strip():
-                        html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')          
+            if is_definition:
+                html_content.append('</div>')
 
-                if is_definition:
-                    html_content.append('</div>')
+    except Exception as e:
+        print(f"Error processing document: {e}")
 
-    finally:
-        try:
-            os.remove(temp_path)
-
-        except:
-            pass
-
+    # Close HTML
     html_content.append('</div>')
     html_content.append('</body>')
     html_content.append('</html>')
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(''.join(html_content))
+
+    # Optionally save the HTML
+    final_html = '\n'.join(html_content)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(final_html)
+
+    return final_html
