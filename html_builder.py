@@ -5,6 +5,22 @@ from docx import Document
 from docx.oxml.ns import qn
 from PIL import Image
 
+default_styles = {
+        'body': 'font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; color: #333;',
+        'wrapper': 'background: white; padding: 30px; border-radius: 10px;',
+        'h1': 'color: #1a365d; font-size: 32px; margin: 20px 0; padding-bottom: 10px; border-bottom: 2px solid #3498db;',
+        'h2': 'color: #2c5282; font-size: 24px; margin: 15px 0; padding-left: 15px; border-left: 4px solid #3498db;',
+        'h3': 'color: #2b6cb0; font-size: 20px; margin: 15px 0;',
+        'h4': 'color: #2b6cb0; font-size: 19px; margin: 15px 0;',
+        'h5': 'color: #2b6cb0; font-size: 18px; margin: 15px 0;',
+        'h6': 'color: #2b6cb0; font-size: 17px; margin: 15px 0;',
+        'p': 'line-height: 1.6; margin: 15px 0; color: #2d3748;',
+        'definition': 'background: #f8fafc; padding: 15px; margin: 15px 0; border-left: 4px solid #4299e1; border-radius: 4px;',
+        'image': 'margin: 20px auto; text-align: center;',
+        'img': 'max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
+        'strong': 'color: #2c5282; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;',
+        'em': 'color: #4a5568; font-style: italic;',
+    }
 
 def _get_image_mime_type(image_data):
     """Detect image MIME type from its magic numbers."""
@@ -58,25 +74,13 @@ def find_image_id(element):
     return None
 
 
-def build_html(file_path, output_path=None):
+def build_html(file_path, output_path=None, styles=None):
     """Process DOCX file and convert to styled HTML."""
     doc = Document(file_path)
     html_content = []
 
-    # Inline styles
-    styles = {
-        'body': 'font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; color: #333;',
-        'wrapper': 'background: white; padding: 30px; border-radius: 10px;',
-        'h1': 'color: #1a365d; font-size: 32px; margin: 20px 0; padding-bottom: 10px; border-bottom: 2px solid #3498db;',
-        'h2': 'color: #2c5282; font-size: 24px; margin: 15px 0; padding-left: 15px; border-left: 4px solid #3498db;',
-        'h3': 'color: #2b6cb0; font-size: 20px; margin: 15px 0;',
-        'p': 'line-height: 1.6; margin: 15px 0; color: #2d3748;',
-        'definition': 'background: #f8fafc; padding: 15px; margin: 15px 0; border-left: 4px solid #4299e1; border-radius: 4px;',
-        'image': 'margin: 20px auto; text-align: center;',
-        'img': 'max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
-        'strong': 'color: #2c5282; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;',
-        'em': 'color: #4a5568; font-style: italic;',
-    }
+    if not styles:
+        styles = default_styles
 
     # HTML head
     html_content.extend([
