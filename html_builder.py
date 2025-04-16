@@ -20,7 +20,7 @@ def _get_image_mime_type(image_data):
         if image_data.startswith(magic):
             return mime
 
-    return 'image/png'  # default to PNG if unknown
+    return 'image/png'
 
 def _convert_image_to_base64(image_data):
     """Convert image data to base64 string with proper MIME type."""
@@ -54,12 +54,9 @@ def find_image_id(element):
     blip = element.find('.//a:blip', {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
     if blip is not None:
         embed = blip.get(qn('r:embed'))
-            return embed
-            return embed
-
         return embed
-
     return None
+
 
 def build_html(file_path, output_path=None):
     """Process DOCX file and convert to styled HTML."""
@@ -78,7 +75,7 @@ def build_html(file_path, output_path=None):
         'image': 'margin: 20px auto; text-align: center;',
         'img': 'max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
         'strong': 'color: #2c5282; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;',
-        'em': 'color: #4a5568; font-style: italic;'
+        'em': 'color: #4a5568; font-style: italic;',
     }
 
     # HTML head
@@ -95,6 +92,7 @@ def build_html(file_path, output_path=None):
     ])
 
     try:
+        # Map image IDs
         image_rels = {}
         for rel in doc.part.rels.values():
             if "image" in rel.reltype:
@@ -132,11 +130,7 @@ def build_html(file_path, output_path=None):
             xml_element = para._element
             for element in xml_element.iter():
                 if element.tag.endswith('drawing'):
-                        rel_id = find_image_id(element)
-                        rel_id = find_image_id(element)
-
                     rel_id = find_image_id(element)
-
                     if rel_id and rel_id in image_rels:
                         html_content.append(f'<div style="{styles["image"]}">')
                         html_content.append(f'<img src="{image_rels[rel_id]}" alt="Document image" loading="lazy" style="{styles["img"]}">')
@@ -145,11 +139,7 @@ def build_html(file_path, output_path=None):
 
             # Text content
             if text or not has_images:
-                    formatted_text = ""
-                    formatted_text = ""
-
                 formatted_text = ""
-
                 for run in para.runs:
                     run_text = run.text
                     if not run_text.strip():
