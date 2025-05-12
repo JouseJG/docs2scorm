@@ -8,14 +8,14 @@ from PIL import Image
 default_styles = {
         'body': 'font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f8fafc; color: #333;',
         'wrapper': 'background: white; padding: 30px; border-radius: 10px;',
-        'h1': 'color: #1a365d; font-size: 32px; margin: 20px 0; padding-bottom: 10px; border-bottom: 2px solid #3498db;',
-        'h2': 'color: #2c5282; font-size: 24px; margin: 15px 0; padding-left: 15px; border-left: 4px solid #3498db;',
+        'h1': 'color: #1a365d; font-size: 32px; margin: 15px 0; padding-bottom: 10px; border-bottom: 2px solid #3498db;',
+        'h2': 'color: #2c5282; font-size: 24px; margin: 15px 0; padding-left: 15px;',
         'h3': 'color: #2b6cb0; font-size: 20px; margin: 15px 0;',
         'h4': 'color: #2b6cb0; font-size: 19px; margin: 15px 0;',
         'h5': 'color: #2b6cb0; font-size: 18px; margin: 15px 0;',
         'h6': 'color: #2b6cb0; font-size: 17px; margin: 15px 0;',
         'p': 'line-height: 1.6; margin: 15px 0; color: #2d3748;',
-        'definition': 'background: #f8fafc; padding: 15px; margin: 15px 0; border-left: 4px solid #4299e1; border-radius: 4px;',
+        # 'definition': 'background: #f1f5f9; padding: 15px; margin: 15px 0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);',
         'image': 'margin: 20px auto; text-align: center;',
         'img': 'max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
         'strong': 'color: #2c5282; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;',
@@ -123,11 +123,11 @@ def build_html(file_path, output_path=None, styles=None):
                     pass
 
             # Definitions
-            definition_triggers = ['definición:', 'nota:', ':']
-            is_definition = any(text.lower().startswith(t) for t in definition_triggers) or ':' in text[:50]
+            # definition_triggers = ['definición:', 'nota:', ':']
+            # is_definition = any(text.lower().startswith(t) for t in definition_triggers) or ':' in text[:50]
 
-            if is_definition:
-                html_content.append(f'<div style="{styles["definition"]}">')
+            # if is_definition:
+            #     html_content.append(f'<div style="{styles["definition"]}">')
 
             # Inline images
             has_images = False
@@ -161,8 +161,8 @@ def build_html(file_path, output_path=None, styles=None):
                 if formatted_text.strip():
                     html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
 
-            if is_definition:
-                html_content.append('</div>')
+            # if is_definition:
+            #     html_content.append('</div>')
 
     except Exception as e:
         print(f"Error processing document: {e}")
