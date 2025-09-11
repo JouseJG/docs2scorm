@@ -19,8 +19,10 @@ default_styles = {
     'img': 'max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);',
     'strong': 'color: #2c5282; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;',
     'em': 'color: #4a5568; font-style: italic;',
+    'table': 'border-collapse: collapse; margin: 20px 0; width: 100%; border: 1px solid #ccc;',
+    'th': 'padding: 10px; border: 1px solid #ccc; background-color: #2c5282; color: white; text-align: left;',
+    'td': 'padding: 8px; border: 1px solid #ccc;'
 }
-
 
 def _get_image_mime_type(image_data):
     magic_numbers = {
@@ -212,14 +214,34 @@ def build_html(file_path, output_path=None, styles=None):
                 if not table:
                     continue
 
-                html_content.append('<table border="1" style="border-collapse: collapse; margin: 20px 0; width: 100%;">')
-                for row in table.rows:
+                rows_count = len(table.rows)
+                cols_count = len(table.rows[0].cells) if rows_count > 0 else 0
+
+                # Siempre envolvemos en <table>
+                html_content.append(f'<table style="{styles.get("table", "")}">')
+
+                # Caso 1x1: usar SOLO <td> (sin <th>, por lo que no aplica color de encabezado)
+                if rows_count == 1 and cols_count == 1:
+                    single_cell_text = ' '.join(p.text.strip() for p in table.rows[0].cells[0].paragraphs)
+                    html_content.append('<tr>')
+                    html_content.append(f'<td style="{styles.get("td", "")}">{single_cell_text}</td>')
+                    html_content.append('</tr>')
+                    html_content.append('</table>')
+                    continue
+
+                # Resto de tablas: primera fila como encabezado <th>, demás <td>
+                for row_idx, row in enumerate(table.rows):
                     html_content.append('<tr>')
                     for cell in row.cells:
                         cell_text = ' '.join(paragraph.text.strip() for paragraph in cell.paragraphs)
-                        html_content.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{cell_text}</td>')
+                        if row_idx == 0:
+                            html_content.append(f'<th style="{styles.get("th", "")}">{cell_text}</th>')
+                        else:
+                            html_content.append(f'<td style="{styles.get("td", "")}">{cell_text}</td>')
                     html_content.append('</tr>')
                 html_content.append('</table>')
+
+
 
         # Cerrar lista si quedó abierta
         if in_list:
