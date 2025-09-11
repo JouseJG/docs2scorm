@@ -117,104 +117,113 @@ def build_html(file_path, output_path=None, styles=None):
                 except Exception as e:
                     print(f"Error cargando imagen: {e}")
 
-        # Procesar párrafos
         in_list = False
         list_tag = None
 
-        for para in doc.paragraphs:
-            text = para.text.strip()
-            style_name = getattr(para.style, "name", "").lower()
+        body_elements = list(doc.element.body)
 
-            # Encabezados
-            if style_name.startswith("heading"):
-                try:
-                    level = int(style_name.split()[-1])
-                    heading_style = styles.get(f"h{level}", "")
-                    html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
+        for element in body_elements:
+            # Procesar párrafo
+            if element.tag.endswith('p'):
+                para = next((p for p in doc.paragraphs if p._p == element), None)
+                if not para:
                     continue
-                except (IndexError, ValueError):
-                    pass
 
-            # Verificar si es lista
-            if is_list_paragraph(para):
-                tag = get_list_type(para)
+                text = para.text.strip()
+                style_name = getattr(para.style, "name", "").lower()
 
-                # Abrir lista si necesario
-                if not in_list or list_tag != tag:
+                # Encabezados
+                if style_name.startswith("heading"):
+                    try:
+                        level = int(style_name.split()[-1])
+                        heading_style = styles.get(f"h{level}", "")
+                        html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
+                        continue
+                    except (IndexError, ValueError):
+                        pass
+
+                # Listas
+                if is_list_paragraph(para):
+                    tag = get_list_type(para)
+
+                    if not in_list or list_tag != tag:
+                        if in_list:
+                            html_content.append(f'</{list_tag}>')
+                        html_content.append(f'<{tag}>')
+                        in_list = True
+                        list_tag = tag
+
+                    formatted_text = ""
+                    for run in para.runs:
+                        run_text = run.text
+                        if not run_text.strip():
+                            continue
+                        if run.bold and run.italic:
+                            formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
+                        elif run.bold:
+                            formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
+                        elif run.italic:
+                            formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
+                        else:
+                            formatted_text += run_text
+
+                    html_content.append(f'<li>{formatted_text}</li>')
+                    continue
+                else:
                     if in_list:
                         html_content.append(f'</{list_tag}>')
-                    html_content.append(f'<{tag}>')
-                    in_list = True
-                    list_tag = tag
+                        in_list = False
+                        list_tag = None
 
-                # Agregar item de lista
-                formatted_text = ""
-                for run in para.runs:
-                    run_text = run.text
-                    if not run_text.strip():
-                        continue
-                    if run.bold and run.italic:
-                        formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
-                    elif run.bold:
-                        formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
-                    elif run.italic:
-                        formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
-                    else:
-                        formatted_text += run_text
+                # Imágenes en línea
+                has_images = False
+                xml_element = para._element
+                for el in xml_element.iter():
+                    if el.tag.endswith('drawing'):
+                        rel_id = find_image_id(el)
+                        if rel_id and rel_id in image_rels:
+                            html_content.append(f'<div style="{styles["image"]}">')
+                            html_content.append(f'<img src="{image_rels[rel_id]}" alt="Imagen del documento" loading="lazy" style="{styles["img"]}">')
+                            html_content.append('</div>')
+                            has_images = True
 
-                html_content.append(f'<li>{formatted_text}</li>')
-                continue
-            else:
-                if in_list:
-                    html_content.append(f'</{list_tag}>')
-                    in_list = False
-                    list_tag = None
+                # Texto normal
+                if text or not has_images:
+                    formatted_text = ""
+                    for run in para.runs:
+                        run_text = run.text
+                        if not run_text.strip():
+                            continue
+                        if run.bold and run.italic:
+                            formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
+                        elif run.bold:
+                            formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
+                        elif run.italic:
+                            formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
+                        else:
+                            formatted_text += run_text
 
-            # Imágenes en línea
-            has_images = False
-            xml_element = para._element
-            for element in xml_element.iter():
-                if element.tag.endswith('drawing'):
-                    rel_id = find_image_id(element)
-                    if rel_id and rel_id in image_rels:
-                        html_content.append(f'<div style="{styles["image"]}">')
-                        html_content.append(f'<img src="{image_rels[rel_id]}" alt="Imagen del documento" loading="lazy" style="{styles["img"]}">')
-                        html_content.append('</div>')
-                        has_images = True
+                    if formatted_text.strip():
+                        html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
 
-            # Texto normal
-            if text or not has_images:
-                formatted_text = ""
-                for run in para.runs:
-                    run_text = run.text
-                    if not run_text.strip():
-                        continue
-                    if run.bold and run.italic:
-                        formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
-                    elif run.bold:
-                        formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
-                    elif run.italic:
-                        formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
-                    else:
-                        formatted_text += run_text
+            # Procesar tabla
+            elif element.tag.endswith('tbl'):
+                table = next((t for t in doc.tables if t._tbl == element), None)
+                if not table:
+                    continue
 
-                if formatted_text.strip():
-                    html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
+                html_content.append('<table border="1" style="border-collapse: collapse; margin: 20px 0; width: 100%;">')
+                for row in table.rows:
+                    html_content.append('<tr>')
+                    for cell in row.cells:
+                        cell_text = ' '.join(paragraph.text.strip() for paragraph in cell.paragraphs)
+                        html_content.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{cell_text}</td>')
+                    html_content.append('</tr>')
+                html_content.append('</table>')
 
         # Cerrar lista si quedó abierta
         if in_list:
             html_content.append(f'</{list_tag}>')
-
-        # Procesar tablas
-        for table in doc.tables:
-            html_content.append('<table border="1" style="border-collapse: collapse; margin: 20px 0; width: 100%;">')
-            for row in table.rows:
-                html_content.append('<tr>')
-                for cell in row.cells:
-                    cell_text = ' '.join(paragraph.text.strip() for paragraph in cell.paragraphs)
-                    html_content.append(f'<td style="padding: 8px; border: 1px solid #ccc;">{cell_text}</td>')
-                html_content.append('</tr>')
-            html_content.append('</table>')
 
     except Exception as e:
         print(f"Error procesando documento: {e}")
