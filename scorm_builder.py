@@ -133,13 +133,38 @@ def package_scorm(output_dir, output_zip_path):
 
 
 def build_scorm_package(units_and_ungrouped, output_zip_path, course_title="Mi Curso SCORM"):
+    """
+    Construye un paquete SCORM desde unidades y páginas no agrupadas.
+
+    :param units_and_ungrouped: Puede ser:
+        - Una tupla (units, ungrouped_pages)
+        - Una lista de varias tuplas [(units, ungrouped_pages), ...]
+    :param output_zip_path: Ruta al archivo .zip SCORM de salida
+    :param course_title: Título del curso SCORM
+    """
     temp_dir = f"scorm_temp_{uuid4().hex}"
     os.makedirs(temp_dir, exist_ok=True)
 
     try:
-        units, ungrouped_pages = units_and_ungrouped
-        units, ungrouped_pages = save_pages_as_html(units, ungrouped_pages, temp_dir)
-        build_imsmanifest(course_title, units, ungrouped_pages, temp_dir)
+        # Normalizar entrada: permitir lista de tuplas
+        if isinstance(units_and_ungrouped, tuple):
+            all_units, all_ungrouped = units_and_ungrouped
+        elif isinstance(units_and_ungrouped, list):
+            all_units, all_ungrouped = [], []
+            for units, ungrouped in units_and_ungrouped:
+                all_units.extend(units)
+                all_ungrouped.extend(ungrouped)
+        else:
+            raise ValueError("units_and_ungrouped debe ser una tupla o una lista de tuplas")
+
+        # Guardar HTMLs con plantilla
+        all_units, all_ungrouped = save_pages_as_html(all_units, all_ungrouped, temp_dir)
+
+        # Generar imsmanifest.xml
+        build_imsmanifest(course_title, all_units, all_ungrouped, temp_dir)
+
+        # Empaquetar SCORM
         package_scorm(temp_dir, output_zip_path)
+
     finally:
         shutil.rmtree(temp_dir)

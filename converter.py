@@ -57,8 +57,8 @@ def extract_hierarchical_sections(html_content, ignore_empty_titles=True, includ
     current_intro = ""
     pending_h1_tag = None
 
-    for tag in soup.children:
-        tag_name = getattr(tag, "name", None)
+    for tag in soup.find_all(True, recursive=True):
+        tag_name = tag.name
 
         if tag_name == "h1":
             # Guardar contenido de la unidad anterior como página si existe
