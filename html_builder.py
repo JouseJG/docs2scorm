@@ -64,6 +64,7 @@ def _convert_image_to_base64(image_data):
 
 
 def find_image_id(element):
+    """Encuentra el r:embed ID en un elemento w:drawing"""
     blip = element.find('.//a:blip', {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
     if blip is not None:
         embed = blip.get(qn('r:embed'))
@@ -123,6 +124,14 @@ def build_html(file_path, output_path=None, styles=None):
         list_tag = None
 
         body_elements = list(doc.element.body)
+        
+        # Namespaces necesarios para buscar elementos
+        namespaces = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+            'v': 'urn:schemas-microsoft-com:vml'
+        }
 
         for element in body_elements:
             # Procesar párrafo
@@ -139,7 +148,11 @@ def build_html(file_path, output_path=None, styles=None):
                     try:
                         level = int(style_name.split()[-1])
                         heading_style = styles.get(f"h{level}", "")
+                        if text:
                         html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
+                        html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
+                        continue
+                            html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
                         continue
                     except (IndexError, ValueError):
                         pass
@@ -180,36 +193,57 @@ def build_html(file_path, output_path=None, styles=None):
                 # Imágenes en línea
                 has_images = False
                 xml_element = para._element
-                for el in xml_element.iter():
-                    if el.tag.endswith('drawing'):
-                        rel_id = find_image_id(el)
-                        if rel_id and rel_id in image_rels:
-                            html_content.append(f'<div style="{styles["image"]}">')
-                            html_content.append(f'<img src="{image_rels[rel_id]}" alt="Imagen del documento" loading="lazy" style="{styles["img"]}">')
-                            html_content.append('</div>')
-                            has_images = True
+                
+                for drawing in xml_element.findall('.//w:drawing', namespaces):
+                    rel_id = find_image_id(drawing)
+                    if rel_id and rel_id in image_rels:
+                        html_content.append(f'<div style="{styles["image"]}">')
+                        html_content.append(f'<img src="{image_rels[rel_id]}" alt="Imagen del documento" loading="lazy" style="{styles["img"]}">')
+                        html_content.append('</div>')
+                        has_images = True
 
-                # Texto normal
-                if text or not has_images:
-                    formatted_text = ""
-                    for run in para.runs:
-                        run_text = run.text
-                        if not run_text.strip():
-                            continue
-                        if run.bold and run.italic:
-                            formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
-                        elif run.bold:
-                            formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
-                        elif run.italic:
-                            formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
-                        else:
-                            formatted_text += run_text
+                if not has_images:
+                    for pict in xml_element.findall('.//w:pict', namespaces):
+                        imagedata = pict.find('.//v:imagedata', namespaces)
+                        if imagedata is not None:
+                            rel_id = imagedata.get(qn('r:id'))
+                            if rel_id and rel_id in image_rels:
+                                html_content.append(f'<div style="{styles["image"]}">')
+                                html_content.append(f'<img src="{image_rels[rel_id]}" alt="Imagen del documento" loading="lazy" style="{styles["img"]}">')
+                                html_content.append('</div>')
+                                has_images = True 
+                
+                if not style_name.startswith("heading") and not is_list_paragraph(para):
+                    if text or not has_images:
+                        formatted_text = ""
+                        for run in para.runs:
+                            # Evitar procesar "runs" que en realidad son imágenes
+                            if run._r.find('.//w:drawing', namespaces) is not None or run._r.find('.//w:pict', namespaces) is not None:
+                                continue
+                            
+                            run_text = run.text # ¡CORRECCIÓN! Asignar run_text DENTRO del bucle
+                            if not run_text.strip():
+                                continue
+                                
+                            if run.bold and run.italic:
+                                formatted_text += f'<strong style="{styles["strong"]}"><em style="{styles["em"]}">{run_text}</em></strong>'
+                            elif run.bold:
+                                formatted_text += f'<strong style="{styles["strong"]}">{run_text}</strong>'
+                            elif run.italic:
+                                formatted_text += f'<em style="{styles["em"]}">{run_text}</em>'
+                            else:
+                                formatted_text += run_text
 
-                    if formatted_text.strip():
-                        html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
+                        if formatted_text.strip():
+                            html_content.append(f'<p style="{styles["p"]}">{formatted_text}</p>')
 
             # Procesar tabla
             elif element.tag.endswith('tbl'):
+                if in_list:
+                    html_content.append(f'</{list_tag}>')
+                    in_list = False
+                    list_tag = None
+
                 table = next((t for t in doc.tables if t._tbl == element), None)
                 if not table:
                     continue
@@ -240,8 +274,6 @@ def build_html(file_path, output_path=None, styles=None):
                             html_content.append(f'<td style="{styles.get("td", "")}">{cell_text}</td>')
                     html_content.append('</tr>')
                 html_content.append('</table>')
-
-
 
         # Cerrar lista si quedó abierta
         if in_list:
