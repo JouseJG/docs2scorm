@@ -149,11 +149,7 @@ def build_html(file_path, output_path=None, styles=None):
                         level = int(style_name.split()[-1])
                         heading_style = styles.get(f"h{level}", "")
                         if text:
-                        html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
-                        html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
-                        continue
                             html_content.append(f'<h{level} style="{heading_style}">{text}</h{level}>')
-                        continue
                     except (IndexError, ValueError):
                         pass
 
