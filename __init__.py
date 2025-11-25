@@ -1,4 +1,4 @@
-from .converter import convert_to_pages, extract_hierarchical_sections
+from .converter import convert_to_tree, html_to_hierarchical_tree
 from .scorm_builder import build_scorm_package
 from .html_builder import build_html
 import os
@@ -18,13 +18,13 @@ def doc_to_scorm(file_path, output_zip, config=None):
         - course_title (str): Título del curso SCORM
     """
     config = config or DEFAULT_CONFIG
-
+    split_tags = config.get("split_tags", ["h1", "h2", "h3"])
     try:
-        units_and_ungrouped = convert_to_pages(file_path, split_level=config["split_level"])
-        build_scorm_package(units_and_ungrouped, output_zip, course_title=config["course_title"])
+        data = convert_to_tree(file_path, split_tags=split_tags)
+        build_scorm_package(data, output_zip, course_title=config.get("course_title", "Curso"))
         return True
     except Exception as e:
-        print(e)
+        print(f"Error en doc_to_scorm: {e}")
         return None
 
 def doc_to_html(file_path, output_path=None):
@@ -40,35 +40,41 @@ def doc_to_html(file_path, output_path=None):
         print(e)
         return None
 
-def html_to_scorm(html_files: List[str], output_zip: str, config=None):
-    """
-    Convierte uno o varios archivos HTML en un paquete SCORM.
-
-    :param html_files: Lista de rutas a archivos HTML.
-    :param output_zip: Ruta donde se guardará el paquete SCORM .zip.
-    :param config: Diccionario con configuración opcional:
-        - course_title (str): Título del curso SCORM
-    """
+def html_to_scorm(html_files: List[str], output_zip: str, config=None, assets: List[str] = None):
     config = config or DEFAULT_CONFIG
     course_title = config.get("course_title", "Curso SCORM")
+    split_tags = [t.lower() for t in config.get("split_tags", ["h1", "h2", "h3"])]
 
     try:
-        all_units = []
-        all_ungrouped = []
+        full_tree = []
+        global_resources = {"css": "", "js": ""}
 
         for html_input in html_files:
+            if not os.path.exists(html_input): continue
+            
             with open(html_input, "r", encoding="utf-8") as f:
                 html_content = f.read()
 
-            units, ungrouped = extract_hierarchical_sections(
-                html_content, ignore_empty_titles=True
-            )
-            all_units.extend(units)
-            all_ungrouped.extend(ungrouped)
-        print("Units:", all_units)
-        print("Ungrouped:", all_ungrouped)
-        build_scorm_package((all_units, all_ungrouped), output_zip, course_title=course_title)
+            # Usamos la nueva función recursiva
+            tree_nodes, resources = html_to_hierarchical_tree(html_content, split_tags=split_tags)
+            
+            full_tree.extend(tree_nodes)
+            
+            if resources:
+                global_resources["css"] += resources["css"] + "\n"
+                global_resources["js"] += resources["js"] + "\n"
+        
+        print(f"✅ Procesando {len(full_tree)} nodos raíz para el SCORM.")
+        
+        build_scorm_package(
+            (full_tree, global_resources), 
+            output_zip, 
+            course_title=course_title,
+            assets_paths=assets
+        )
         return True
     except Exception as e:
         print(f"❌ Error en html_to_scorm: {e}")
+        import traceback
+        traceback.print_exc()
         return None
