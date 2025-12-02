@@ -1,5 +1,5 @@
-from .converter import convert_to_tree, html_to_hierarchical_tree
-from .scorm_builder import build_scorm_package
+from .converter import convert_to_tree
+from .scorm_builder import build_scorm_package, html_to_hierarchical_tree
 from .html_builder import build_html
 import os
 from .config import DEFAULT_CONFIG
