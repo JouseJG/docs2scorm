@@ -50,12 +50,14 @@ def html_to_scorm(html_files: List[str], output_zip: str, config=None, assets: L
         global_resources = {"css": "", "js": ""}
 
         for html_input in html_files:
-            if not os.path.exists(html_input): continue
+            if not os.path.exists(html_input): 
+                print(f"⚠️ Archivo no encontrado: {html_input}")
+                continue
             
             with open(html_input, "r", encoding="utf-8") as f:
                 html_content = f.read()
 
-            # Usamos la nueva función recursiva
+            # Convertimos y paginamos
             tree_nodes, resources = html_to_hierarchical_tree(html_content, split_tags=split_tags)
             
             full_tree.extend(tree_nodes)
@@ -64,7 +66,7 @@ def html_to_scorm(html_files: List[str], output_zip: str, config=None, assets: L
                 global_resources["css"] += resources["css"] + "\n"
                 global_resources["js"] += resources["js"] + "\n"
         
-        print(f"✅ Procesando {len(full_tree)} nodos raíz para el SCORM.")
+        print(f"✅ Procesando {len(full_tree)} nodos raíz (con sub-paginación strong aplicada).")
         
         build_scorm_package(
             (full_tree, global_resources), 

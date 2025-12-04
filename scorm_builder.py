@@ -6,17 +6,17 @@ from uuid import uuid4
 import xml.etree.ElementTree as ET
 from xml.dom.minidom import parseString
 from bs4 import BeautifulSoup, NavigableString, Tag
+import re
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
+# --- BUILDER & TEMPLATE ---
 def save_tree_files(tree_nodes, output_dir, resources, template_name="base.html"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template(template_name)
     
-    # Pasamos las variables tal cual vienen del converter (que ya incluyen <style> o <script>)
     extra_css = resources.get("css", "")
     extra_js = resources.get("js", "")
-    
     counter = 0
 
     def recursive_save(nodes):
@@ -41,15 +41,8 @@ def save_tree_files(tree_nodes, output_dir, resources, template_name="base.html"
 
     recursive_save(tree_nodes)
 
-import os
-import xml.etree.ElementTree as ET
-from uuid import uuid4
-from xml.dom.minidom import parseString
-import re
-
 def sanitize_title(title):
-    """Elimina caracteres problemáticos (como emojis) del título"""
-    return re.sub(r'[^\w\s\-.,;:()&]', '', title)
+    return re.sub(r'[^\w\s\-.,;:()&/áéíóúÁÉÍÓÚñÑ]', '', title)
 
 def build_imsmanifest(course_title, tree_nodes, output_dir, extra_files=None):
     ET.register_namespace('', "http://www.imsproject.org/xsd/imscp_rootv1p1p2")
@@ -79,34 +72,34 @@ def build_imsmanifest(course_title, tree_nodes, output_dir, extra_files=None):
             item_id = f"ITEM-{uuid4().hex}"
             res_id = f"RES-{uuid4().hex}"
 
-            # Crear <item>
+            # Crear item en el árbol (menú)
             item = ET.SubElement(parent_xml, "item",
                                  identifier=item_id,
                                  identifierref=res_id)
             ET.SubElement(item, "title").text = sanitize_title(node["title"])
 
-            # Crear <resource> como SCO
+            # Crear resource (archivo físico)
             res = ET.SubElement(resources_elem, "resource", {
                 "identifier": res_id,
                 "type": "webcontent",
-                f"{{{NS_ADLCP}}}scormtype": "sco",  # <-- cambio aquí
+                f"{{{NS_ADLCP}}}scormtype": "sco",
                 "href": node["filename"]
             })
             ET.SubElement(res, "file", href=node["filename"])
 
+            # Recursividad
             if node.get("children"):
                 recursive_item_builder(item, node["children"])
 
     recursive_item_builder(organization, tree_nodes)
 
-    # Archivos extra como "asset"
     if extra_files:
         for filename in extra_files:
             res_id = f"RES-{uuid4().hex}"
             res = ET.SubElement(resources_elem, "resource", {
                 "identifier": res_id,
                 "type": "webcontent",
-                f"{{{NS_ADLCP}}}scormtype": "asset",  # <-- archivos extra como asset
+                f"{{{NS_ADLCP}}}scormtype": "asset",
                 "href": filename
             })
             ET.SubElement(res, "file", href=filename)
@@ -117,8 +110,6 @@ def build_imsmanifest(course_title, tree_nodes, output_dir, extra_files=None):
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "imsmanifest.xml"), "w", encoding="utf-8") as f:
         f.write(pretty_xml)
-
-
 
 def copy_assets(assets_paths, destination_dir):
     if not assets_paths: return
@@ -147,38 +138,81 @@ def build_scorm_package(tree_data, output_zip_path, course_title="Curso SCORM", 
                     abs_path = os.path.join(root, file)
                     rel_path = os.path.relpath(abs_path, temp_dir)
                     zipf.write(abs_path, rel_path)
-        print(f"✅ SCORM Generado (Compatible SCORM Cloud): {output_zip_path}")
+        print(f"✅ SCORM Generado: {output_zip_path}")
         
     finally:
         if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
+
+# --- LOGICA DE PAGINACIÓN (RENOMBRADO) ---
+
+def process_pagination_titles(nodes):
+    """
+    Recorre los nodos hermanos. Si encuentra títulos idénticos consecutivos (generados por splits),
+    los renombra añadiendo (x/y).
+    Ejemplo: "Cosméticos" -> "Cosméticos (1/2)" y "Cosméticos (2/2)"
+    """
+    if not nodes:
+        return
+
+    # Agrupar nodos consecutivos con el mismo título base
+    groups = []
+    if nodes:
+        current_group = [nodes[0]]
+        for i in range(1, len(nodes)):
+            if nodes[i]['title'] == nodes[i-1]['title']:
+                current_group.append(nodes[i])
+            else:
+                groups.append(current_group)
+                current_group = [nodes[i]]
+        groups.append(current_group)
+
+    # Renombrar grupos
+    for group in groups:
+        total = len(group)
+        if total > 1:
+            for index, node in enumerate(group):
+                # Añadimos el contador al título
+                node['title'] = f"{node['title']} ({index + 1}/{total})"
+
+        # Recursividad para los hijos de cada nodo
+        for node in group:
+            if node['children']:
+                process_pagination_titles(node['children'])
+
+# --- CONVERTER (CON LOGICA DE STRONG) ---
 
 def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
     soup = BeautifulSoup(html_content, "html.parser")
     resources = {"css": "", "js": ""}
 
-    # 1. Extraer Assets Globales
-    # IMPORTANTE: Aquí guardamos str(tag), que incluye <style> y <script>
+    # 1. Extraer Assets
     for tag in soup.find_all(['style', 'script', 'link']):
         if tag.name == 'link' and 'stylesheet' in tag.get('rel', []):
              resources["css"] += str(tag) + "\n"
              tag.extract()
         elif tag.name == 'style':
-            if tag.string: resources["css"] += str(tag) + "\n" # Guardamos el tag completo
+            if tag.string: resources["css"] += str(tag) + "\n"
             tag.extract()
         elif tag.name == 'script':
-            resources["js"] += str(tag) + "\n" # Guardamos el tag completo
+            resources["js"] += str(tag) + "\n"
             tag.extract()
 
     header_levels = {tag: int(tag[1]) for tag in split_tags}
     
+    # Nodo raíz invisible
     root_node = {
         'title': 'Inicio', 'level': 0, 'content': '', 'children': [], 'filename': ''
     }
     stack = [root_node]
     
-    def element_contains_header(element, tags_set):
+    # Tags que provocan un split normal (headers) o forzado (strong)
+    # Strong no tiene nivel numérico en header_levels, se maneja especial.
+    
+    def element_contains_splitters(element):
+        """Revisa si el elemento contiene headers O strongs dentro."""
         if not isinstance(element, Tag): return False
-        return bool(element.find(tags_set))
+        # Buscamos headers definidos o strong
+        return bool(element.find(split_tags + ['strong']))
 
     def process_element(element):
         if not isinstance(element, Tag):
@@ -188,10 +222,12 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
 
         tag_name = element.name.lower()
 
+        # CASO A: Es un HEADER (H1, H2, H3...)
         if tag_name in header_levels:
             level = header_levels[tag_name]
             title = element.get_text(strip=True) or "Sin Título"
             
+            # Cerrar niveles más profundos o iguales
             while len(stack) > 1 and stack[-1]['level'] >= level:
                 stack.pop()
             
@@ -205,10 +241,41 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
             stack[-1]['children'].append(new_node)
             stack.append(new_node)
 
-        elif element_contains_header(element, split_tags):
+        # CASO B: Es un STRONG (Split forzado dentro del mismo nivel)
+        elif tag_name == 'strong':
+            # Solo hacemos split si ya estamos dentro de un nodo real (no en la raíz vacía)
+            # y si el nodo actual tiene contenido previo (para no crear páginas vacías al inicio)
+            current_node = stack[-1]
+            parent_node = stack[-2] if len(stack) > 1 else None
+
+            # Si estamos en un nivel válido para dividir
+            if parent_node and current_node['content'].strip():
+                # Crear nodo hermano (copia del título y nivel actual)
+                new_sibling = {
+                    'title': current_node['title'], # Mismo título (se renumerará después)
+                    'level': current_node['level'],
+                    'content': str(element), # El contenido empieza con el strong
+                    'children': [],
+                    'filename': ''
+                }
+                
+                # Añadir al padre (es hermano del actual)
+                parent_node['children'].append(new_sibling)
+                
+                # Cambiar el puntero del stack: sacamos el actual, metemos el nuevo
+                stack.pop()
+                stack.append(new_sibling)
+            else:
+                # Si es el primer elemento o estamos en raíz, lo tratamos como texto normal
+                stack[-1]['content'] += str(element)
+
+        # CASO C: Contenedor con headers o strongs dentro (Drill down)
+        elif element_contains_splitters(element):
+            # No guardamos el tag wrapper, entramos en sus hijos
             for child in element.children:
                 process_element(child)
 
+        # CASO D: Contenido normal
         else:
             stack[-1]['content'] += str(element)
 
@@ -225,5 +292,9 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
             'filename': ''
         }
         root_node['children'].insert(0, intro_node)
+
+    # 2. PROCESAR PAGINACIÓN (1/X)
+    # Antes de devolver el árbol, renombramos los nodos repetidos
+    process_pagination_titles(root_node['children'])
 
     return root_node['children'], resources
