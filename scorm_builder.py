@@ -11,35 +11,48 @@ import re
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 # --- BUILDER & TEMPLATE ---
-def save_tree_files(tree_nodes, output_dir, resources, template_name="base.html"):
+def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.html"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template(template_name)
     
     extra_css = resources.get("css", "")
     extra_js = resources.get("js", "")
-    counter = 0
 
-    def recursive_save(nodes):
-        nonlocal counter
+    # --- 1) Aplanar nodos en orden ---
+    flat_list = []
+
+    def flatten(nodes):
         for node in nodes:
-            counter += 1
-            filename = f"sco_{counter}.html"
-            node['filename'] = filename
-            
-            html = template.render(
-                title=node['title'],
-                content=node['content'],
-                extra_css=extra_css,
-                extra_js=extra_js
-            )
-            
-            with open(os.path.join(output_dir, filename), "w", encoding="utf-8") as f:
-                f.write(html)
-            
+            flat_list.append(node)
             if node['children']:
-                recursive_save(node['children'])
+                flatten(node['children'])
 
-    recursive_save(tree_nodes)
+    flatten(tree_nodes)
+
+    # --- 2) Asignar filenames en orden ---
+    for index, node in enumerate(flat_list):
+        node['filename'] = f"sco_{index+1}.html"
+
+    # --- 3) Asignar prev y next ---
+    for i, node in enumerate(flat_list):
+        node["prev"] = flat_list[i-1]["filename"] if i > 0 else None
+        node["next"] = flat_list[i+1]["filename"] if i < len(flat_list)-1 else None
+
+    # --- 4) Guardar archivos con la plantilla ---
+    for node in flat_list:
+        html = template.render(
+            title=node['title'],
+            content=node['content'],
+            extra_css=extra_css,
+            extra_js=extra_js,
+            prev=node["prev"],
+            next=node["next"]
+        )
+        
+        path = os.path.join(output_dir, node['filename'])
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+
 
 def sanitize_title(title):
     return re.sub(r'[^\w\s\-.,;:()&/áéíóúÁÉÍÓÚñÑ]', '', title)
@@ -85,6 +98,16 @@ def build_imsmanifest(course_title, tree_nodes, output_dir, extra_files=None):
                 f"{{{NS_ADLCP}}}scormtype": "sco",
                 "href": node["filename"]
             })
+            # Un SCO real sólo al nivel 1 (h1)
+            # is_sco = (node["level"] == 2)
+
+            # res = ET.SubElement(resources_elem, "resource", {
+            #     "identifier": res_id,
+            #     "type": "webcontent",
+            #     f"{{{NS_ADLCP}}}scormtype": "sco" if is_sco else "asset",
+            #     "href": node["filename"]
+            # })
+
             ET.SubElement(res, "file", href=node["filename"])
 
             # Recursividad
@@ -212,7 +235,7 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
         """Revisa si el elemento contiene headers O strongs dentro."""
         if not isinstance(element, Tag): return False
         # Buscamos headers definidos o strong
-        return bool(element.find(split_tags + ['strong']))
+        return bool(element.find(split_tags)) # + ['strong']))
 
     def process_element(element):
         if not isinstance(element, Tag):
@@ -242,32 +265,32 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
             stack.append(new_node)
 
         # CASO B: Es un STRONG (Split forzado dentro del mismo nivel)
-        elif tag_name == 'strong':
-            # Solo hacemos split si ya estamos dentro de un nodo real (no en la raíz vacía)
-            # y si el nodo actual tiene contenido previo (para no crear páginas vacías al inicio)
-            current_node = stack[-1]
-            parent_node = stack[-2] if len(stack) > 1 else None
+        # elif tag_name == 'strong':
+        #     # Solo hacemos split si ya estamos dentro de un nodo real (no en la raíz vacía)
+        #     # y si el nodo actual tiene contenido previo (para no crear páginas vacías al inicio)
+        #     current_node = stack[-1]
+        #     parent_node = stack[-2] if len(stack) > 1 else None
 
-            # Si estamos en un nivel válido para dividir
-            if parent_node and current_node['content'].strip():
-                # Crear nodo hermano (copia del título y nivel actual)
-                new_sibling = {
-                    'title': current_node['title'], # Mismo título (se renumerará después)
-                    'level': current_node['level'],
-                    'content': str(element), # El contenido empieza con el strong
-                    'children': [],
-                    'filename': ''
-                }
+        #     # Si estamos en un nivel válido para dividir
+        #     if parent_node and current_node['content'].strip():
+        #         # Crear nodo hermano (copia del título y nivel actual)
+        #         new_sibling = {
+        #             'title': current_node['title'], # Mismo título (se renumerará después)
+        #             'level': current_node['level'],
+        #             'content': str(element), # El contenido empieza con el strong
+        #             'children': [],
+        #             'filename': ''
+        #         }
                 
-                # Añadir al padre (es hermano del actual)
-                parent_node['children'].append(new_sibling)
+        #         # Añadir al padre (es hermano del actual)
+        #         parent_node['children'].append(new_sibling)
                 
-                # Cambiar el puntero del stack: sacamos el actual, metemos el nuevo
-                stack.pop()
-                stack.append(new_sibling)
-            else:
-                # Si es el primer elemento o estamos en raíz, lo tratamos como texto normal
-                stack[-1]['content'] += str(element)
+        #         # Cambiar el puntero del stack: sacamos el actual, metemos el nuevo
+        #         stack.pop()
+        #         stack.append(new_sibling)
+        #     else:
+        #         # Si es el primer elemento o estamos en raíz, lo tratamos como texto normal
+        #         stack[-1]['content'] += str(element)
 
         # CASO C: Contenedor con headers o strongs dentro (Drill down)
         elif element_contains_splitters(element):

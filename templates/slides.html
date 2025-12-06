@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    /* height: 100%; */
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden; /* ✨ SIN SCROLL */
+}
+
+.slide-wrapper {
+    height: 100vh;
+    width: 100vw;
+    /* width: 100%;
+    height: 100%; */
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.slide-content {
+    flex: 1;  /* ocupa todo */
+    padding: 40px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box; /**/
+}
+
+.slide-inner {
+    /* width: 100%;
+    max-width: 1000px;
+    height: auto; */
+
+    max-width: 1000px;
+    max-height: calc(100vh - 120px); /* navbar + padding */
+    overflow: hidden;
+}
+
+.navbar {
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f0f0f0;
+    padding: 10px 20px;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+}
+
+.nav-btn {
+    padding: 10px 18px;
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.nav-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+img { max-width: 100%; height: auto; }
+</style>
+
+{% if extra_css %}
+        {{ extra_css | safe }}
+{% endif %}
+</head>
+
+<body>
+<div class="slide-wrapper">
+
+    <div class="slide-content">
+        <div class="slide-inner">
+            {{ content | safe }}
+        </div>
+    </div>
+
+    <!-- NAV BAR -->
+    <div class="navbar">
+        <button class="nav-btn" id="btnPrev" {% if not prev %} disabled {% endif %}>Anterior</button>
+        <button class="nav-btn" id="btnNext" {% if not next %} disabled {% endif %}>Siguiente</button>
+    </div>
+
+</div>
+
+<script>
+    const NEXT_PAGE = "{{ next | default('') }}";
+    const PREV_PAGE = "{{ prev | default('') }}";
+    const NEXT_SCO  = "{{ next_sco | default('') }}";
+
+    document.getElementById("btnPrev").onclick = () => {
+        if (PREV_PAGE !== "") {
+            window.location.href = PREV_PAGE;
+        } else {
+            alert("No hay diapositiva anterior");
+        }
+    };
+    
+    document.getElementById("btnNext").onclick = () => {
+        if (NEXT_PAGE !== "") {
+            // Navegar a la siguiente página interna del SCO
+            window.location.href = NEXT_PAGE;
+            return;
+        }
+    
+        if (NEXT_SCO !== "") {
+            // Navegar al siguiente SCO
+            window.location.href = NEXT_SCO;
+            return;
+        }
+    
+        // Si ya no hay páginas NI SCO: marcar completado
+        try {
+            const API = window.API || window.parent.API;
+            API.LMSSetValue("cmi.core.lesson_status", "completed");
+            API.LMSCommit("");
+        } catch (e) {
+            console.warn("SCORM API no encontrada");
+        }
+    
+        alert("Fin del módulo");
+    };
+</script>
+    
+{% if extra_js %}
+        {{ extra_js | safe }}
+{% endif %}
+
+</body>
+</html>
