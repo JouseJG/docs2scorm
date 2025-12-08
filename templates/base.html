@@ -27,9 +27,11 @@
         th { background-color: #f2f2f2; }
     </style>
     
+    <!-- css original del doc -->
     {% if extra_css %}
         {{ extra_css | safe }}
     {% endif %}
+
 </head>
 <body>
     <div class="scorm-container">
@@ -38,6 +40,7 @@
         {{ content | safe }}
     </div>
 
+    <!-- js original del doc -->
     {% if extra_js %}
         {{ extra_js | safe }}
     {% endif %}

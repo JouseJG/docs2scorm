@@ -73,6 +73,7 @@ html, body {
 img { max-width: 100%; height: auto; }
 </style>
 
+<!-- css original del doc -->
 {% if extra_css %}
         {{ extra_css | safe }}
 {% endif %}
@@ -100,40 +101,86 @@ img { max-width: 100%; height: auto; }
     const PREV_PAGE = "{{ prev | default('') }}";
     const NEXT_SCO  = "{{ next_sco | default('') }}";
 
-    document.getElementById("btnPrev").onclick = () => {
-        if (PREV_PAGE !== "") {
-            window.location.href = PREV_PAGE;
-        } else {
-            alert("No hay diapositiva anterior");
+    document.addEventListener("DOMContentLoaded", () => {
+        const container = document.querySelector(".slide-inner");
+        const rawHTML = container.innerHTML;
+
+        const temp = document.createElement("div");
+        temp.innerHTML = rawHTML;
+
+        let slides = [];
+        let currentSlide = document.createElement("div");
+
+        container.style.visibility = "hidden"; // ocultar mientras calculamos
+
+        const MAX_HEIGHT = container.clientHeight;
+
+        [...temp.children].forEach(elem => {
+            currentSlide.appendChild(elem.cloneNode(true));
+
+            container.innerHTML = "";
+            container.appendChild(currentSlide);
+
+            if (container.scrollHeight > MAX_HEIGHT) {
+                // quitar el último elemento que causó overflow
+                currentSlide.removeChild(currentSlide.lastElementChild);
+
+                slides.push(currentSlide);
+
+                // crear nueva slide
+                currentSlide = document.createElement("div");
+                currentSlide.appendChild(elem.cloneNode(true));
+            }
+        });
+
+        // agregar última slide
+        slides.push(currentSlide);
+
+        // estado
+        let index = 0;
+
+        function renderSlide() {
+            container.innerHTML = slides[index].innerHTML;
         }
-    };
-    
-    document.getElementById("btnNext").onclick = () => {
-        if (NEXT_PAGE !== "") {
-            // Navegar a la siguiente página interna del SCO
-            window.location.href = NEXT_PAGE;
-            return;
-        }
-    
-        if (NEXT_SCO !== "") {
-            // Navegar al siguiente SCO
-            window.location.href = NEXT_SCO;
-            return;
-        }
-    
-        // Si ya no hay páginas NI SCO: marcar completado
-        try {
-            const API = window.API || window.parent.API;
-            API.LMSSetValue("cmi.core.lesson_status", "completed");
-            API.LMSCommit("");
-        } catch (e) {
-            console.warn("SCORM API no encontrada");
-        }
-    
-        alert("Fin del módulo");
-    };
+
+        renderSlide();
+        container.style.visibility = "visible";
+
+        // === BOTONES ===
+        const btnPrev = document.getElementById("btnPrev");
+        const btnNext = document.getElementById("btnNext");
+
+        btnPrev.onclick = () => {
+            if (index > 0) {
+                index--;
+                renderSlide();
+            } else if ("{{ prev }}") {
+                // ir al SCO anterior
+                window.location.href = "{{ prev }}";
+            }
+        };
+
+        btnNext.onclick = () => {
+            if (index < slides.length - 1) {
+                index++;
+                renderSlide();
+            } else if ("{{ next }}") {
+                // ir al siguiente SCO
+                window.location.href = "{{ next }}";
+            } else {
+                // finalizar SCO
+                try {
+                    const API = window.API || window.parent.API;
+                    API.LMSSetValue("cmi.core.lesson_status", "completed");
+                    API.LMSCommit("");
+                } catch(e) {}
+                alert("Fin del módulo");
+            }
+        };
+    });
 </script>
-    
+
+<!-- js original del doc -->
 {% if extra_js %}
         {{ extra_js | safe }}
 {% endif %}
