@@ -105,6 +105,54 @@ img { max-width: 100%; height: auto; }
         const temp = document.createElement("div");
         temp.innerHTML = rawHTML;
 
+        const children = [...temp.children];
+        const joined = [];   // hijos con correcciones de cohesión
+    
+        function shouldGroup(elem, next) {
+            if (!next) return false;
+    
+            // 1. Heading nunca debe quedar solo
+            if (/^H[1-6]$/.test(elem.tagName)) return true;
+    
+            // 2. Listas completas
+            if (elem.tagName === "LI") return true;
+    
+            // 3. Tablas completas
+            if (elem.tagName === "TABLE") return true;
+    
+            // 4. Si el siguiente es un LI y este NO es un UL/OL, lo agrupamos
+            if (next.tagName === "LI") return true;
+    
+            return false;
+        }
+    
+        let i = 0;
+        while (i < children.length) {
+            const elem = children[i];
+            const next = children[i + 1];
+    
+            // Si debe agruparse con el siguiente → crear wrapper temporal
+            if (shouldGroup(elem, next)) {
+                const wrapper = document.createElement("div");
+                wrapper.appendChild(elem.cloneNode(true));
+    
+                while (children[i + 1] && shouldGroup(children[i], children[i + 1])) {
+                    i++;
+                    wrapper.appendChild(children[i].cloneNode(true));
+                }
+    
+                joined.push(wrapper);
+            } else {
+                joined.push(elem.cloneNode(true));
+            }
+    
+            i++;
+        }
+    
+        // limpiamos temp y lo reemplazamos
+        temp.innerHTML = "";
+        joined.forEach(el => temp.appendChild(el));
+    
         let slides = [];
         let currentSlide = document.createElement("div");
 
