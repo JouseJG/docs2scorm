@@ -17,6 +17,25 @@ def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.htm
     
     extra_css = resources.get("css", "")
     extra_js = resources.get("js", "")
+    extra_js_not_script = ""
+
+    if template_name == "slides.html":
+        soup = BeautifulSoup(extra_js, 'html.parser')
+
+        # Extraemos todos los scripts
+        scripts = soup.find_all('script')
+
+        # Usamos una expresión regular para encontrar la función que comienza con 'document.addEventListener'
+        pattern = re.compile(r"document.addEventListener\('DOMContentLoaded',\s*function\s*\(\)\s*{(.*)}\);", re.DOTALL)
+
+        # Buscamos la función en el contenido de los scripts
+        for script in scripts:
+            content = script.string
+            if content:
+
+                match = pattern.search(content)
+                if match:
+                    extra_js_not_script = match.group(1).strip()
 
     # --- 1) Aplanar nodos en orden ---
     flat_list = []
@@ -45,6 +64,7 @@ def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.htm
             content=node['content'],
             extra_css=extra_css,
             extra_js=extra_js,
+            extra_js_not_script=extra_js_not_script,
             prev=node["prev"],
             next=node["next"]
         )
@@ -167,7 +187,6 @@ def build_scorm_package(tree_data, output_zip_path, course_title="Curso SCORM", 
         if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
 
 # --- LOGICA DE PAGINACIÓN (RENOMBRADO) ---
-
 def process_pagination_titles(nodes):
     """
     Recorre los nodos hermanos. Si encuentra títulos idénticos consecutivos (generados por splits),
@@ -203,7 +222,6 @@ def process_pagination_titles(nodes):
                 process_pagination_titles(node['children'])
 
 # --- CONVERTER (CON LOGICA DE STRONG) ---
-
 def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
     soup = BeautifulSoup(html_content, "html.parser")
     resources = {"css": "", "js": ""}
@@ -263,34 +281,6 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
             }
             stack[-1]['children'].append(new_node)
             stack.append(new_node)
-
-        # CASO B: Es un STRONG (Split forzado dentro del mismo nivel)
-        # elif tag_name == 'strong':
-        #     # Solo hacemos split si ya estamos dentro de un nodo real (no en la raíz vacía)
-        #     # y si el nodo actual tiene contenido previo (para no crear páginas vacías al inicio)
-        #     current_node = stack[-1]
-        #     parent_node = stack[-2] if len(stack) > 1 else None
-
-        #     # Si estamos en un nivel válido para dividir
-        #     if parent_node and current_node['content'].strip():
-        #         # Crear nodo hermano (copia del título y nivel actual)
-        #         new_sibling = {
-        #             'title': current_node['title'], # Mismo título (se renumerará después)
-        #             'level': current_node['level'],
-        #             'content': str(element), # El contenido empieza con el strong
-        #             'children': [],
-        #             'filename': ''
-        #         }
-                
-        #         # Añadir al padre (es hermano del actual)
-        #         parent_node['children'].append(new_sibling)
-                
-        #         # Cambiar el puntero del stack: sacamos el actual, metemos el nuevo
-        #         stack.pop()
-        #         stack.append(new_sibling)
-        #     else:
-        #         # Si es el primer elemento o estamos en raíz, lo tratamos como texto normal
-        #         stack[-1]['content'] += str(element)
 
         # CASO C: Contenedor con headers o strongs dentro (Drill down)
         elif element_contains_splitters(element):

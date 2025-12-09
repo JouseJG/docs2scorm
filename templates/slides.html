@@ -186,6 +186,7 @@ img { max-width: 100%; height: auto; }
 
         function renderSlide() {
             container.innerHTML = slides[index].innerHTML;
+            setupInteractividad();
         }
 
         renderSlide();
@@ -226,8 +227,18 @@ img { max-width: 100%; height: auto; }
 </script>
 
 <!-- js original del doc -->
-{% if extra_js %}
-        {{ extra_js | safe }}
+{% if extra_js_not_script %}
+<script>
+function setupInteractividad() {
+    {{ extra_js_not_script | safe }}
+};
+</script>
+{% else %}
+<script>
+    function setupInteractividad() {
+        console.log("No se ha cargado código JS adicional.");
+};
+</script>
 {% endif %}
 
 </body>
