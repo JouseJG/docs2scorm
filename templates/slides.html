@@ -250,6 +250,7 @@ img { max-width: 100%; height: auto; }
             
             // Actualizar estado botones (opcional, visual)
             // btnPrev.disabled = (index === 0 && !"{{ prev }}");
+            btnPrev.disabled = (index === 0);
         }
 
         renderSlide();
@@ -259,11 +260,12 @@ img { max-width: 100%; height: auto; }
             if (index > 0) {
                 index--;
                 renderSlide();
-            } else if ("{{ prev }}") {
-                // ir al SCO anterior
-                finishSCORM();
-                window.location.href = "{{ prev }}";
-            }
+            } 
+            // else if ("{{ prev }}") {
+            //     // ir al SCO anterior
+            //     finishSCORM();
+            //     window.location.href = "{{ prev }}";
+            // }
         };
 
         btnNext.onclick = () => {
