@@ -99,8 +99,64 @@ img { max-width: 100%; height: auto; }
 </div>
 
 <script>
+    // ==========================================
+    // UTILIDADES SCORM (SCORM WRAPPER SIMPLE)
+    // ==========================================
+    var SCORM_API = null;
 
+    function findAPI(win) {
+        // Busca la API en la ventana actual y sube por la jerarquía de frames
+        var findAPITries = 0;
+        while ((win.API == null) && (win.parent != null) && (win.parent != win)) {
+            findAPITries++;
+            if (findAPITries > 7) return null;
+            win = win.parent;
+        }
+        return win.API;
+    }
+
+    function getAPI() {
+        var theAPI = findAPI(window);
+        if ((theAPI == null) && (window.opener != null) && (typeof(window.opener) != "undefined")) {
+            theAPI = findAPI(window.opener);
+        }
+        if (theAPI == null) {
+            console.warn("SCORM API no encontrada via window, parent o opener.");
+        }
+        return theAPI;
+    }
+
+    function initSCORM() {
+        SCORM_API = getAPI();
+        if (SCORM_API) {
+            SCORM_API.LMSInitialize("");
+            
+            // Verificamos estado actual. Si no está completado, lo ponemos en "incomplete"
+            var status = SCORM_API.LMSGetValue("cmi.core.lesson_status");
+            if (status !== "completed" && status !== "passed") {
+                SCORM_API.LMSSetValue("cmi.core.lesson_status", "incomplete");
+                SCORM_API.LMSCommit("");
+            }   
+        }
+    }
+
+    function finishSCORM(status) {
+        if (SCORM_API) {
+            if (status) {
+                SCORM_API.LMSSetValue("cmi.core.lesson_status", status);
+            }
+            SCORM_API.LMSCommit(""); // Guardar datos
+            SCORM_API.LMSFinish(""); // Cerrar conexión "colgar teléfono"
+        }
+    }
+
+    // ==========================================
+    // LOGICA DE SLIDES
+    // ==========================================
     document.addEventListener("DOMContentLoaded", () => {
+        // 1. INICIALIZAR SCORM AL CARGAR
+        initSCORM();
+
         const container = document.querySelector(".slide-inner");
         const rawHTML = container.innerHTML;
 
@@ -185,18 +241,19 @@ img { max-width: 100%; height: auto; }
 
         // estado
         let index = 0;
+        const btnPrev = document.getElementById("btnPrev");
+        const btnNext = document.getElementById("btnNext");
 
         function renderSlide() {
             container.innerHTML = slides[index].innerHTML;
             setupInteractividad();
+            
+            // Actualizar estado botones (opcional, visual)
+            // btnPrev.disabled = (index === 0 && !"{{ prev }}");
         }
 
         renderSlide();
         container.style.visibility = "visible";
-
-        // === BOTONES ===
-        const btnPrev = document.getElementById("btnPrev");
-        const btnNext = document.getElementById("btnNext");
 
         btnPrev.onclick = () => {
             if (index > 0) {
@@ -204,6 +261,7 @@ img { max-width: 100%; height: auto; }
                 renderSlide();
             } else if ("{{ prev }}") {
                 // ir al SCO anterior
+                finishSCORM();
                 window.location.href = "{{ prev }}";
             }
         };
@@ -212,20 +270,28 @@ img { max-width: 100%; height: auto; }
             if (index < slides.length - 1) {
                 index++;
                 renderSlide();
-            } else if ("{{ next }}") {
-                // ir al siguiente SCO
-                window.location.href = "{{ next }}";
             } else {
-                // finalizar SCO
-                try {
-                    const API = window.API || window.parent.API;
-                    API.LMSSetValue("cmi.core.lesson_status", "completed");
-                    API.LMSCommit("");
-                } catch(e) {}
-                alert("Fin del módulo");
+                
+                // 1. Marcar como completado    
+                finishSCORM("completed");
+
+                // 2. Navegación
+                if ("{{ next }}") {
+                    window.location.href = "{{ next }}";
+                } else {
+                    // Si no hay siguiente URL, es el final del curso
+                    alert("Has finalizado este módulo.");
+                    // En algunos LMS conviene cerrar la ventana:
+                    // window.close(); 
+                }
             }
         };
     });
+
+    // SEGURIDAD: Si el usuario cierra la pestaña a la fuerza, intentamos cerrar conexión
+    window.onunload = function() {
+        finishSCORM();
+    };
 </script>
 
 <!-- js original del doc -->
