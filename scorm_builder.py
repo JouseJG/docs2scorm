@@ -311,3 +311,54 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
     process_pagination_titles(root_node['children'])
 
     return root_node['children'], resources
+
+def build_scorm_wrapper_package(output_zip_path, course_title, curso_id, visor_url_base, assets_paths=None):
+    """
+    Genera un SCORM 'ligero' que apunta a la nube.
+    NO procesa HTML, NO parte en trozos. Solo crea el puente.
+    """
+    temp_dir = f"scorm_wrapper_temp_{uuid4().hex}"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        src_js = os.path.join(TEMPLATE_DIR, "scorm_wrapper.js")
+        dst_js = os.path.join(temp_dir, "scorm_wrapper.js")
+        
+        if os.path.exists(src_js):
+            shutil.copy(src_js, dst_js)
+        else:
+            print(f"❌ ERROR: No encuentro scorm_wrapper.js en {TEMPLATE_DIR}")
+        
+        shutil.copy(os.path.join(TEMPLATE_DIR, "scorm_wrapper.js"), os.path.join(temp_dir, "scorm_wrapper.js"))
+
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+        template = env.get_template("wrapper.html")
+        
+        html_content = template.render(
+            title=course_title,
+            visor_url=visor_url_base, # Ej: https://app.tuempresa.com/visor
+            curso_id=curso_id
+        )
+        
+        with open(os.path.join(temp_dir, "index.html"), "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        dummy_node = [{
+            "title": course_title,
+            "filename": "index.html",
+            "children": []
+        }]
+        
+        build_imsmanifest(course_title, dummy_node, temp_dir)
+
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    abs_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(abs_path, temp_dir)
+                    zipf.write(abs_path, rel_path)
+                    
+        print(f"✅ SCORM wrapper (Nube) Generado: {output_zip_path}")
+        
+    finally:
+        if os.path.exists(temp_dir): shutil.rmtree(temp_dir)

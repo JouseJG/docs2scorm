@@ -1,5 +1,5 @@
 from .converter import convert_to_tree
-from .scorm_builder import build_scorm_package, html_to_hierarchical_tree
+from .scorm_builder import build_scorm_package, html_to_hierarchical_tree, build_scorm_wrapper_package
 from .html_builder import build_html
 import os
 from .config import DEFAULT_CONFIG
@@ -80,3 +80,24 @@ def html_to_scorm(html_files: List[str], output_zip: str, config=None, assets: L
         import traceback
         traceback.print_exc()
         return None
+
+def build_scorm_wrapper(curso_id: str, output_zip: str, config=None):
+    """
+    Punto de entrada para generar SCORMs conectados a la nube.
+    """
+    config = config or {}
+    course_title = config.get("course_title", "Curso Online")
+    # URL de tu frontend React (donde vive el Visor)
+    visor_url = config.get("visor_url", "http://localhost:5173")
+    
+    try:
+        build_scorm_wrapper_package(
+            output_zip_path=output_zip,
+            course_title=course_title,
+            curso_id=curso_id,
+            visor_url_base=visor_url
+        )
+        return True
+    except Exception as e:
+        print(f"❌ Error generando Cloud SCORM: {e}")
+        return False
