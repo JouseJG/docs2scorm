@@ -81,12 +81,13 @@ def html_to_scorm(html_files: List[str], output_zip: str, config=None, assets: L
         traceback.print_exc()
         return None
 
-def build_scorm_wrapper(curso_id: str, output_zip: str, config=None):
+def build_scorm_wrapper(curso_id: str, output_zip: str, config=None, extra_params={}):
     """
     Punto de entrada para generar SCORMs conectados a la nube.
     """
     config = config or {}
     course_title = config.get("course_title", "Curso Online")
+
     # URL de tu frontend React (donde vive el Visor)
     visor_url = config.get("visor_url", "http://localhost:5173")
     
@@ -95,7 +96,8 @@ def build_scorm_wrapper(curso_id: str, output_zip: str, config=None):
             output_zip_path=output_zip,
             course_title=course_title,
             curso_id=curso_id,
-            visor_url_base=visor_url
+            visor_url_base=visor_url,
+            extra_params=extra_params
         )
         return True
     except Exception as e:

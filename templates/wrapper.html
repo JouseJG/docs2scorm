@@ -22,62 +22,9 @@
 </head>
 
 <body>
-    <iframe id="contentFrame" src="{{ visor_url }}?curso_id={{ curso_id }}" allowfullscreen></iframe>
+    <iframe id="contentFrame" src="{{ visor_url }}" allowfullscreen></iframe>
     
     <script src="scorm_wrapper.js"></script>
-
-    <!-- <script>
-        // 1. INICIALIZAR SCORM
-        var scorm = pipwerks.SCORM; // Asumiendo que incluyes pipwerks
-        scorm.version = "1.2"; // O detecta auto
-        var lmsConnected = scorm.init();
-
-        var iframe = document.getElementById('contentFrame');
-
-        // 2. ESCUCHAR MENSAJES DEL IFRAME (TU REACT)
-        window.addEventListener("message", function (event) {
-
-            // SEGURIDAD: Verificar origen (opcional pero recomendado)
-            // if (event.origin !== "https://tudominio.com") return;
-
-            var data = event.data;
-
-            if (data.type === "LMS_COMMIT") {
-                // El iframe pide guardar datos (ej: suspend_data)
-                if (lmsConnected && data.payload) {
-                    if (data.payload.score) scorm.set("cmi.core.score.raw", data.payload.score);
-                    if (data.payload.status) scorm.set("cmi.core.lesson_status", data.payload.status);
-                    if (data.payload.suspend_data) scorm.set("cmi.suspend_data", JSON.stringify(data.payload.suspend_data));
-
-                    scorm.save();
-                    console.log("💾 SCORM Guardado desde Nube:", data.payload);
-                }
-            } else if (data.type === "LMS_GET_DATA") {
-                // El iframe pide datos al cargar (para restaurar sesión)
-                if (lmsConnected) {
-                    var suspendData = scorm.get("cmi.suspend_data");
-                    var learnerName = scorm.get("cmi.core.student_name");
-                    var status = scorm.get("cmi.core.lesson_status");
-
-                    // Respondemos al iframe
-                    iframe.contentWindow.postMessage({
-                        type: "LMS_DATA_RECEIVED",
-                        payload: {
-                            suspend_data: suspendData ? JSON.parse(suspendData) : null,
-                            learner_name: learnerName,
-                            status: status
-                        }
-                    }, "*"); // Ojo con el "*" en producción
-                }
-            }
-        });
-
-        // 3. CERRAR CONEXIÓN AL SALIR
-        window.onunload = function () {
-            scorm.quit();
-        };
-
-    </script> -->
 
     <script>
         // 1. INICIALIZAR SCORM

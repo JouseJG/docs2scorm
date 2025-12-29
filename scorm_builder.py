@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from xml.dom.minidom import parseString
 from bs4 import BeautifulSoup, NavigableString, Tag
 import re
+from urllib.parse import urlencode
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
@@ -312,15 +313,23 @@ def html_to_hierarchical_tree(html_content, split_tags=['h1', 'h2', 'h3']):
 
     return root_node['children'], resources
 
-def build_scorm_wrapper_package(output_zip_path, course_title, curso_id, visor_url_base, assets_paths=None):
+def build_scorm_wrapper_package(output_zip_path, course_title, curso_id, visor_url_base, extra_params=None, assets_paths=None):
     """
     Genera un SCORM 'ligero' que apunta a la nube.
     NO procesa HTML, NO parte en trozos. Solo crea el puente.
     """
+    
+    extra_params = extra_params or {}
     temp_dir = f"scorm_wrapper_temp_{uuid4().hex}"
     os.makedirs(temp_dir, exist_ok=True)
     
     try:
+        query_params = {
+            "curso_id": curso_id,
+            **extra_params
+        }
+        visor_full_url = f"{visor_url_base}?{urlencode(query_params)}"
+
         src_js = os.path.join(TEMPLATE_DIR, "scorm_wrapper.js")
         dst_js = os.path.join(temp_dir, "scorm_wrapper.js")
         
@@ -336,8 +345,7 @@ def build_scorm_wrapper_package(output_zip_path, course_title, curso_id, visor_u
         
         html_content = template.render(
             title=course_title,
-            visor_url=visor_url_base, # Ej: https://app.tuempresa.com/visor
-            curso_id=curso_id
+            visor_url=visor_full_url # Ej: https://app.tuempresa.com/visor
         )
         
         with open(os.path.join(temp_dir, "index.html"), "w", encoding="utf-8") as f:
