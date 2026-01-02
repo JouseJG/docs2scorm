@@ -27,28 +27,14 @@
     <script src="scorm_wrapper.js"></script>
 
     <script>
-        // 1. INICIALIZAR SCORM
         var scorm = pipwerks.SCORM; 
-        
-        // MEJORA 1: Comentamos esto para dejar que Pipwerks detecte si es 1.2 o 2004 automáticamente.
-        // scorm.version = "1.2"; 
-        
         var lmsConnected = scorm.init();
         var iframe = document.getElementById('contentFrame');
 
-        // Log inicial para depuración
-        if(lmsConnected){
-            console.log("✅ SCORM Conectado. API Version: " + scorm.version);
-        } else {
-            console.warn("⚠️ Modo Offline o API SCORM no encontrada.");
-        }
+        if(lmsConnected) console.log("✅ SCORM Conectado (" + scorm.version + ")");
+        else console.warn("⚠️ Modo Offline (Sin LMS)");
 
-        // 2. ESCUCHAR MENSAJES DEL IFRAME (TU REACT)
         window.addEventListener("message", function (event) {
-
-            // NOTA: En producción, descomenta esto y pon la URL de tu servidor para evitar ataques XSS
-            // if (event.origin !== "https://tu-plataforma.com") return;
-
             var data = event.data;
 
             // --- ESCRIBIR DATOS (COMMIT) ---
@@ -56,71 +42,56 @@
                 if (lmsConnected && data.payload) {
                     var success = true;
 
-                    // Guardar Nota (Score)
-                    if (typeof data.payload.score !== 'undefined') {
+                    // 1. Nota (Score)
+                    if (data.payload.score !== undefined) 
                         success = scorm.set("cmi.core.score.raw", data.payload.score) && success;
-                    }
                     
-                    // Guardar Estado (lesson_status)
-                    if (data.payload.status) {
+                    // 2. Estado (Status)
+                    if (data.payload.status) 
                         success = scorm.set("cmi.core.lesson_status", data.payload.status) && success;
+
+                    // 3. Bookmark (NUEVO: Importante para diapositivas)
+                    if (data.payload.bookmark) {
+                        success = scorm.set("cmi.core.lesson_location", data.payload.bookmark) && success;
                     }
                     
-                    // Guardar Datos (suspend_data)
-                    // MEJORA 3: Protección básica de longitud
+                    // 4. Datos Extra (Suspend Data)
                     if (data.payload.suspend_data) {
                         var dataString = JSON.stringify(data.payload.suspend_data);
-                        // SCORM 1.2 límite: 4096 caracteres. SCORM 2004: 64,000.
-                        if(scorm.version === "1.2" && dataString.length > 4000){
-                            console.warn("⚠️ Cuidado: suspend_data excede límite seguro de SCORM 1.2");
-                        }
                         success = scorm.set("cmi.suspend_data", dataString) && success;
                     }
 
-                    if(success){
-                        scorm.save();
-                        console.log("💾 SCORM Guardado OK:", data.payload);
-                    } else {
-                        console.error("❌ Error al guardar en LMS via Pipwerks");
-                    }
+                    if(success) scorm.save();
                 }
             } 
             
             // --- LEER DATOS (GET) ---
             else if (data.type === "LMS_GET_DATA") {
                 if (lmsConnected) {
-                    var rawSuspendData = scorm.get("cmi.suspend_data");
                     var learnerName = scorm.get("cmi.core.student_name");
                     var status = scorm.get("cmi.core.lesson_status");
+                    var bookmark = scorm.get("cmi.core.lesson_location"); // Leemos dónde se quedó
+                    var rawSuspendData = scorm.get("cmi.suspend_data");
                     
-                    // MEJORA 2: Parsing seguro de JSON
                     var parsedSuspendData = null;
                     try {
-                        if (rawSuspendData && rawSuspendData !== "null" && rawSuspendData !== "undefined") {
-                            parsedSuspendData = JSON.parse(rawSuspendData);
-                        }
-                    } catch (e) {
-                        console.error("Error parseando suspend_data del LMS:", e);
-                        parsedSuspendData = null; // Reiniciar si está corrupto
-                    }
+                        if (rawSuspendData) parsedSuspendData = JSON.parse(rawSuspendData);
+                    } catch (e) {}
 
-                    // Respondemos al iframe
                     iframe.contentWindow.postMessage({
                         type: "LMS_DATA_RECEIVED",
                         payload: {
-                            suspend_data: parsedSuspendData,
                             learner_name: learnerName,
-                            status: status
+                            status: status,
+                            bookmark: bookmark, // Enviamos "slide_X" a React
+                            suspend_data: parsedSuspendData
                         }
                     }, "*");
                 }
             }
         });
 
-        // 3. CERRAR CONEXIÓN AL SALIR
-        window.onunload = function () {
-            scorm.quit();
-        };
+        window.onunload = function () { scorm.quit(); };
     </script>
 
 </body>
