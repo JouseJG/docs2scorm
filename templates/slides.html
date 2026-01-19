@@ -283,19 +283,14 @@ img { max-width: 100%; height: auto; }
                 index++;
                 renderSlide();
             } else {
-                
                 // 1. Marcar como completado    
-                finishSCORM("completed");
-
-                // 2. Navegación
-                if ("{{ next }}") {
-                    window.location.href = "{{ next }}";
-                } else {
-                    // Si no hay siguiente URL, es el final del curso
-                    alert("Has finalizado este módulo.");
-                    // En algunos LMS conviene cerrar la ventana:
-                    // window.close(); 
+                if (SCORM_API) {
+                    SCORM_API.LMSSetValue("cmi.core.lesson_status", "completed");
+                    SCORM_API.LMSCommit(""); // Guardar datos
                 }
+
+                // 2. Dejar que el LMS maneje la navegación
+                alert("Unidad Completada");
             }
         };
     });
