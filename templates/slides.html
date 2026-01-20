@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ title }}</title>
 
+{% for s in head_scripts %}
+    {{ s | safe }}
+{% endfor %}
+
 <style>
 html, body {
     margin: 0;
@@ -305,7 +309,17 @@ img { max-width: 100%; height: auto; }
 {% if extra_js_not_script %}
 <script>
 function setupInteractividad() {
-    {{ extra_js_not_script | safe }}
+    function init() {
+        // Código dinámico que viene de extra_js_not_script
+        {{ extra_js_not_script | safe }}
+    }
+    if (document.readyState === "loading") {
+        // La página todavía se está cargando
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        // DOM ya listo (cuando cambiamos slide)
+        init();
+    }
 };
 </script>
 {% else %}
@@ -315,6 +329,14 @@ function setupInteractividad() {
 };
 </script>
 {% endif %}
+
+<script>
+    // RenderSlide ya se asegura de llamar setupInteractividad después de insertar la slide
+    document.addEventListener("DOMContentLoaded", () => {
+        setupInteractividad();  // llamas a renderSlide, que llama a setupInteractividad
+    });
+</script>
+    
 
 </body>
 </html>

@@ -15,7 +15,8 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.html"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template(template_name)
-    
+    head_scripts = []
+
     extra_css = resources.get("css", "")
     extra_js = resources.get("js", "")
     extra_js_not_script = ""
@@ -23,20 +24,39 @@ def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.htm
     if template_name == "slides.html":
         soup = BeautifulSoup(extra_js, 'html.parser')
 
-        # Extraemos todos los scripts
-        scripts = soup.find_all('script')
+        head_scripts = []
+        extra_js_not_script = ""
+
+        for script in soup.find_all("script"):
+            src = script.get("src")
+            type_module = script.get("type") == "module"
+
+            if src or type_module:
+                # Scripts externos o modules van al head
+                if str(script) not in head_scripts:
+                    head_scripts.append(str(script))
+            else:
+                # Inline scripts solo si no están vacíos
+                if script.string:
+                    # Evitar duplicados
+                    code = script.string.strip()
+                    if code not in extra_js_not_script:
+                        extra_js_not_script += code + "\n"
+
+           
+        # scripts = soup.find_all('script')
 
         # Usamos una expresión regular para encontrar la función que comienza con 'document.addEventListener'
-        pattern = re.compile(r"document.addEventListener\('DOMContentLoaded',\s*function\s*\(\)\s*{(.*)}\);", re.DOTALL)
+        # pattern = re.compile(r"document.addEventListener\('DOMContentLoaded',\s*function\s*\(\)\s*{(.*)}\);", re.DOTALL)
 
         # Buscamos la función en el contenido de los scripts
-        for script in scripts:
-            content = script.string
-            if content:
+        # for script in scripts:
+        #     content = script.string
+        #     if content:
 
-                match = pattern.search(content)
-                if match:
-                    extra_js_not_script = match.group(1).strip()
+        #         match = pattern.search(content)
+        #         if match:
+        #             extra_js_not_script = match.group(1).strip()
 
     # --- 1) Aplanar nodos en orden ---
     flat_list = []
@@ -64,7 +84,7 @@ def save_tree_files(tree_nodes, output_dir, resources, template_name="slides.htm
             title=node['title'],
             content=node['content'],
             extra_css=extra_css,
-            extra_js=extra_js,
+            head_scripts=head_scripts,
             extra_js_not_script=extra_js_not_script,
             prev=node["prev"],
             next=node["next"]
